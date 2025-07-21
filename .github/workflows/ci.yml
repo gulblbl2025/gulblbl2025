@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        job_id: [1, 2, 3, 4]
+        job_id: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - name: 设置环境变量

@@ -2,14 +2,20 @@ import './loadEnv.js';
 import './patches.js';
 import Utility from "./Utility.js";
 import os from 'os';
-import puppeteer, { ElementHandle, Page } from 'puppeteer';
+import puppeteer, { ElementHandle } from 'puppeteer';
 import logger from './logger.js';
 import { authenticator } from 'otplib';
-import fs from 'fs';
 import path from 'path';
 // import clipboardy from 'clipboardy';
 
 (async () => {
+    const { GITHUB_USERNAME, GITHUB_PASSWORD, GITHUB_SECRET, DELETE_REPO, REMOTE, STRESS_TEST, RUN_CIRCLECI_SETUP } = process.env;
+
+    if (!GITHUB_USERNAME || !GITHUB_PASSWORD || !GITHUB_SECRET) {
+        logger.error("环境变量未配置");
+        return;
+    }
+
     process.on('SIGTERM', async () => {
         // docker-compose down/stop 会触发 SIGTERM 信号
         logger.info('SIGTERM: 终止请求');
@@ -47,13 +53,6 @@ import path from 'path';
             '--disable-extensions-http-throttling'
         ]
     });
-
-    const { GITHUB_USERNAME, GITHUB_PASSWORD, GITHUB_SECRET, DELETE_REPO, REMOTE, STRESS_TEST, RUN_CIRCLECI_SETUP } = process.env;
-
-    if (!GITHUB_USERNAME || !GITHUB_PASSWORD || !GITHUB_SECRET) {
-        logger.error("环境变量未配置");
-        return;
-    }
 
     const [page] = await chrome.pages();
     await page.goto("https://github.com/login");
