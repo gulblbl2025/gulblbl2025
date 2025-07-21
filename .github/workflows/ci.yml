@@ -1,27 +1,21 @@
 on:
   workflow_dispatch:
     inputs:
-      os:
-        description: '系统'
+      action:
+        description: '操作'
         required: true
-        default: 'windows-latest'
+        default: '压测'
         type: choice
         options:
-          - windows-latest
-          - ubuntu-latest
-          - macos-latest
-      
-      port:
-        description: '端口'
-        required: true
-        default: '9001'
-        type: string
+          - 远程
+          - 压测
+          - 配置项目
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-run-name: '${{ inputs.os }} ${{ inputs.port }}'
+run-name: '${{ inputs.action }}'
 
 env:
   TZ: Asia/Shanghai
@@ -34,45 +28,45 @@ jobs:
         job_id: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Write to frpc.toml
-        shell: bash
+      - name: 设置环境变量
         run: |
-          {{ matrix.job_id }}
+          JOB_ID={{ matrix.job_id }}
+          ACCOUNTS='[
+            [],
+            ["Shubhamchak2025@outlook.com", "35c0466E25EC83154D60", "G3U7NSDRIRMHTI25"],
+            ["", "", ""],
+            ["", "", ""]
+          ]'
+          USERNAME=$(echo $ACCOUNTS | jq -r ".[$JOB_ID][0]")
+          PASSWORD=$(echo $ACCOUNTS | jq -r ".[$JOB_ID][1]")
+          SECRET=$(echo $ACCOUNTS | jq -r ".[$JOB_ID][2]")
+          
+          echo "GITHUB_USERNAME=$USERNAME" >> $GITHUB_ENV
+          echo "GITHUB_PASSWORD=$PASSWORD" >> $GITHUB_ENV
+          echo "GITHUB_SECRET=$SECRET" >> $GITHUB_ENV
 
-      - name: 运行Linux
-        if: ${{ runner.os == 'Linux' }}
+          yarn
+          yarn build
+
+      
+
+      - name: 远程
+        if: ${{ inputs.action == '远程' }}
+        env:
+          REMOTE: true
         run: | 
-          # 修改或添加 PasswordAuthentication yes
-          grep -q '^#\?PasswordAuthentication' /etc/ssh/sshd_config \
-            && sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config \
-            || echo 'PasswordAuthentication yes' | sudo tee -a /etc/ssh/sshd_config
+          node dist/app.js
 
-          grep -q '^#\?PasswordAuthentication' /etc/ssh/sshd_config.d/*.conf \
-            && sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config.d/*.conf \
-            || echo 'PasswordAuthentication yes' | sudo tee -a /etc/ssh/sshd_config.d/*.conf
-          
-          sudo systemctl restart ssh
+      - name: 压测
+        if: ${{ inputs.action == '压测' }}
+        env:
+          STRESS_TEST: true
+        run: | 
+          node dist/app.js
 
-          echo "runner:mynewpassword" | sudo chpasswd
-          docker run -d -p 1234:1234 --restart=always alpine/socat TCP-LISTEN:1234,fork TCP:172.17.0.1:22
-          docker run -d --name frpc -v ./frpc.toml:/etc/frp/frpc.toml snowdreamtech/frpc
-          
-          # docker run -d \
-          #   --name socks5-proxy \
-          #   --restart unless-stopped \
-          #   -p 1080:1080 \
-          #   -e PROXY_USER=proxyuser \
-          #   -e PROXY_PASSWORD=4d21b3bb-4186-4a9d-8448-510b4dae395f \
-          #   serjs/go-socks5-proxy
-
-          docker run -d \
-            --restart unless-stopped \
-            -p 8388:8388/tcp \
-            -p 8388:8388/udp \
-            -e TZ=Asia/Shanghai \
-            -e METHOD=aes-256-gcm \
-            -e PASSWORD=6a17a5dd-5f76-4b09-b567-9b0d5d449da5 \
-            shadowsocks/shadowsocks-libev
-
-          docker logs -f frpc
+      - name: 配置项目
+        if: ${{ inputs.action == '配置项目' }}
+        env:
+          RUN_CIRCLECI_SETUP: true
+        run: | 
+          node dist/app.js

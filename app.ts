@@ -48,7 +48,12 @@ import clipboardy from 'clipboardy';
         ]
     });
 
-    const { GITHUB_USERNAME, GITHUB_PASSWORD, GITHUB_SECRET, DELETE_REPO, COMMIT_CHANGES } = process.env;
+    const { GITHUB_USERNAME, GITHUB_PASSWORD, GITHUB_SECRET, DELETE_REPO, REMOTE, STRESS_TEST, RUN_CIRCLECI_SETUP } = process.env;
+
+    if (!GITHUB_USERNAME || !GITHUB_PASSWORD || !GITHUB_SECRET) {
+        logger.error("环境变量未配置");
+        return;
+    }
 
     const [page] = await chrome.pages();
     await page.goto("https://github.com/login");
@@ -67,6 +72,32 @@ import clipboardy from 'clipboardy';
     const username = href.split("/").pop();
     logger.info("用户名", username);
 
+    async function updateFile(source: string, target: string = source) {
+        await page.goto(`https://github.com/${username}/${repoName}/upload/main/${path.dirname(target)}`);
+        const input = await page.waitForSelector('#upload-manifest-files-input') as ElementHandle<HTMLInputElement>;
+        await input.uploadFile(source);
+        logger.info("正在上传");
+        await page.$x("//div[contains(@class, 'js-upload-progress')]");
+        await page.$x("//div[contains(@class, 'js-upload-progress')]", { timeout: 60_000, hidden: true });
+        await (await page.$x("//button[normalize-space(text())='Commit changes']")).click();
+        await page.waitForNavigation();
+        logger.info(`上传成功 ${source} => ${target}`);
+
+        // const textContent = fs.readFileSync(file).toString();
+
+        // if (!await page.goto(`https://github.com/${username}/${repoName}/edit/main/${file}`, { retries: 1 })) {
+        //     await page.goto(`https://github.com/${username}/${repoName}/new/main`);
+        //     await page.type("//input[@placeholder='Name your file...']", file);
+        // }
+
+        // const cmContent = await page.$x("//div[contains(@class, 'cm-editor')]//div[@class='cm-content']");
+        // await cmContent.evaluate((el, textContent) => (el as HTMLDivElement).innerText = textContent, textContent);
+
+        // await (await page.$x("//button[.//span[text()='Commit changes...']]")).click();
+        // await (await page.$x("//button[.//span[text()='Commit changes']]")).click();
+        // await page.waitForNavigation();
+    }
+
     const repoName = "Signal-Server";
 
     if (DELETE_REPO && await page.goto(`https://github.com/${username}/${repoName}/settings`, { retries: 1 })) {
@@ -80,7 +111,7 @@ import clipboardy from 'clipboardy';
         await page.waitForNavigation();
     }
 
-    if (COMMIT_CHANGES && !await page.goto(`https://github.com/${username}/${repoName}/settings`, { retries: 1 })) {
+    if (!await page.goto(`https://github.com/${username}/${repoName}/settings`, { retries: 1 })) {
         await page.goto(`https://github.com/signalapp/${repoName}`);
         await (await page.$x("//a[@id='fork-button']")).click();
         await page.$x("//span[@id='RepoNameInput-is-available']");
@@ -102,89 +133,54 @@ import clipboardy from 'clipboardy';
         }
 
         await page.waitForNavigation();
+        await updateFile(".github/workflows/ci.yml");
+        // await updateFile("frpc.exe");
     }
 
-    if (xxx) {
-        const dir = ".github/workflows";
-        const files = fs.readdirSync(dir).filter(file => fs.statSync(path.join(dir, file)).isFile()).map(file => path.join(dir, file).replace(/\\/g, '/'));
-        files.push("frpc.exe", ".circleci/config.yml");
+    REMOTE && await updateFile(".circleci/config.yml");
+    STRESS_TEST && await updateFile(".circleci/job-sync.yml", ".circleci/config.yml");
 
-        // await page.emulateNetworkConditions({
-        //     download: (100 * 1024) / 8, // 100kbps
-        //     upload: (100 * 1024) / 8,   // 100kbps
-        //     latency: 400, // 400ms
-        // });
+    if (RUN_CIRCLECI_SETUP) {
+        const circleciPage = await chrome.newPage();
+        await circleciPage.goto("https://circleci.com/vcs-authorize");
+        await circleciPage.bringToFront();
+        await (await circleciPage.$x("//button[@data-testid='login-btn']")).click();
+        await (await circleciPage.$x("//div[@data-testid='legacy-vcs-dropdown']")).click();
+        await (await circleciPage.$x("//a[contains(text(), 'Log in with GitHub')]")).click();
 
-        for (const file of files) {
-            if (file.endsWith("remote.yml"))
-                continue;
+        const authorizeFrame = await circleciPage.waitForFrame(frame => frame.url().startsWith("https://github.com/login/oauth/authorize"), { timeout: 3_000 });
+        if (authorizeFrame) {
+            await Utility.waitForSeconds(3);
+            await (await authorizeFrame.$x("//button[contains(text(), 'Authorize circleci')]")).click();
+            logger.info("CircleCI 授权成功");
 
-            await page.goto(`https://github.com/${username}/${repoName}/upload/main/${path.dirname(file)}`);
-            const input = await page.waitForSelector('#upload-manifest-files-input') as ElementHandle<HTMLInputElement>;
-            await input.uploadFile(file);
-            logger.info("正在上传");
-            await page.$x("//div[contains(@class, 'js-upload-progress')]");
-            await page.$x("//div[contains(@class, 'js-upload-progress')]", { timeout: 60_000, hidden: true });
-            await (await page.$x("//button[normalize-space(text())='Commit changes']")).click();
-            await page.waitForNavigation();
-            logger.info("上传成功", file);
-
-            // const textContent = fs.readFileSync(file).toString();
-
-            // if (!await page.goto(`https://github.com/${username}/${repoName}/edit/main/${file}`, { retries: 1 })) {
-            //     await page.goto(`https://github.com/${username}/${repoName}/new/main`);
-            //     await page.type("//input[@placeholder='Name your file...']", file);
-            // }
-
-            // const cmContent = await page.$x("//div[contains(@class, 'cm-editor')]//div[@class='cm-content']");
-            // await cmContent.evaluate((el, textContent) => (el as HTMLDivElement).innerText = textContent, textContent);
-
-            // await (await page.$x("//button[.//span[text()='Commit changes...']]")).click();
-            // await (await page.$x("//button[.//span[text()='Commit changes']]")).click();
-            // await page.waitForNavigation();
-        }
-    }
-
-    const circleciPage = await chrome.newPage();
-    await circleciPage.goto("https://circleci.com/vcs-authorize");
-    await circleciPage.bringToFront();
-    await (await circleciPage.$x("//button[@data-testid='login-btn']")).click();
-    await (await circleciPage.$x("//div[@data-testid='legacy-vcs-dropdown']")).click();
-    await (await circleciPage.$x("//a[contains(text(), 'Log in with GitHub')]")).click();
-
-    const authorizeFrame = await circleciPage.waitForFrame(frame => frame.url().startsWith("https://github.com/login/oauth/authorize"), { timeout: 3_000 });
-    if (authorizeFrame) {
-        await Utility.waitForSeconds(3);
-        await (await authorizeFrame.$x("//button[contains(text(), 'Authorize circleci')]")).click();
-        logger.info("CircleCI 授权成功");
-
-        if (await circleciPage.$x("//h3[contains(text(), 'Welcome to CircleCI!')]")) {
-            for (let i = 1; i <= 3; i++) {
-                await circleciPage.click(`(//span[contains(text(), 'Select...')])[${i}]`);
+            if (await circleciPage.$x("//h3[contains(text(), 'Welcome to CircleCI!')]")) {
+                for (let i = 1; i <= 3; i++) {
+                    await circleciPage.click(`(//span[contains(text(), 'Select...')])[${i}]`);
+                }
             }
+
+            await circleciPage.click("//button[contains(., 'Let's Go')]");
         }
 
-        await circleciPage.click("//button[contains(., 'Let's Go')]");
+        await circleciPage.waitForFrame(frame => frame.url() == "https://app.circleci.com/home");
+
+        await (await circleciPage.$x("//div[@data-cy='orgcard']//img[@alt='org avatar']")).click();
+
+        const getStartedElement = await circleciPage.$x("//h3[contains(text(), 'Get Started')]", { retries: 1 });
+        if (getStartedElement) {
+            await getStartedElement.click();
+            await circleciPage.waitForNavigation();
+
+            await Utility.waitForSeconds(1);
+            await circleciPage.click("//button[@data-cy='project-button' and text()='Set up']");
+            await circleciPage.type("//input[@type='search' and not(@placeholder)]", "main");
+            await circleciPage.click("//button[text()='Set Up Project' and not(@disabled)]");
+        }
     }
 
-    await circleciPage.waitForFrame(frame => frame.url() == "https://app.circleci.com/home");
-
-    await (await circleciPage.$x("//div[@data-cy='orgcard']//img[@alt='org avatar']")).click();
-
-    const getStartedElement = await circleciPage.$x("//h3[contains(text(), 'Get Started')]", { retries: 1 });
-    if (getStartedElement) {
-        await getStartedElement.click();
-        await circleciPage.waitForNavigation();
-
-        await Utility.waitForSeconds(1);
-        await circleciPage.click("//button[@data-cy='project-button' and text()='Set up']");
-        await circleciPage.type("//input[@type='search' and not(@placeholder)]", "main");
-        await circleciPage.click("//button[text()='Set Up Project' and not(@disabled)]");
-    }
+    if (os.platform() == 'linux')
+        await chrome.close();
 
     logger.info("完成");
-
-    // await (await circleciPage.$x("")).click();
-    // await (await circleciPage.$x("")).click();
-    // await (await circleciPage.$x("")).click();
 })();
