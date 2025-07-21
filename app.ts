@@ -7,7 +7,7 @@ import logger from './logger.js';
 import { authenticator } from 'otplib';
 import fs from 'fs';
 import path from 'path';
-import clipboardy from 'clipboardy';
+// import clipboardy from 'clipboardy';
 
 (async () => {
     process.on('SIGTERM', async () => {
