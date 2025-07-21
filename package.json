@@ -1,0 +1,23 @@
+{
+  "name": "app",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --build",
+    "reset": "git reset --hard HEAD"
+  },
+  "dependencies": {
+    "async-retry": "^1.3.3",
+    "axios": "^1.9.0",
+    "dotenv": "^16.5.0",
+    "moment": "^2.30.1",
+    "otplib": "^12.0.1",
+    "puppeteer": "^24.10.2",
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/puppeteer": "^7.0.4",
+    "@types/ws": "^8.18.1",
+    "typescript": "latest"
+  }
+}

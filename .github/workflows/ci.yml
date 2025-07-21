@@ -1,0 +1,78 @@
+on:
+  workflow_dispatch:
+    inputs:
+      os:
+        description: '系统'
+        required: true
+        default: 'windows-latest'
+        type: choice
+        options:
+          - windows-latest
+          - ubuntu-latest
+          - macos-latest
+      
+      port:
+        description: '端口'
+        required: true
+        default: '9001'
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+run-name: '${{ inputs.os }} ${{ inputs.port }}'
+
+env:
+  TZ: Asia/Shanghai
+
+jobs:
+  job:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        job_id: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write to frpc.toml
+        shell: bash
+        run: |
+          {{ matrix.job_id }}
+
+      - name: 运行Linux
+        if: ${{ runner.os == 'Linux' }}
+        run: | 
+          # 修改或添加 PasswordAuthentication yes
+          grep -q '^#\?PasswordAuthentication' /etc/ssh/sshd_config \
+            && sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config \
+            || echo 'PasswordAuthentication yes' | sudo tee -a /etc/ssh/sshd_config
+
+          grep -q '^#\?PasswordAuthentication' /etc/ssh/sshd_config.d/*.conf \
+            && sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config.d/*.conf \
+            || echo 'PasswordAuthentication yes' | sudo tee -a /etc/ssh/sshd_config.d/*.conf
+          
+          sudo systemctl restart ssh
+
+          echo "runner:mynewpassword" | sudo chpasswd
+          docker run -d -p 1234:1234 --restart=always alpine/socat TCP-LISTEN:1234,fork TCP:172.17.0.1:22
+          docker run -d --name frpc -v ./frpc.toml:/etc/frp/frpc.toml snowdreamtech/frpc
+          
+          # docker run -d \
+          #   --name socks5-proxy \
+          #   --restart unless-stopped \
+          #   -p 1080:1080 \
+          #   -e PROXY_USER=proxyuser \
+          #   -e PROXY_PASSWORD=4d21b3bb-4186-4a9d-8448-510b4dae395f \
+          #   serjs/go-socks5-proxy
+
+          docker run -d \
+            --restart unless-stopped \
+            -p 8388:8388/tcp \
+            -p 8388:8388/udp \
+            -e TZ=Asia/Shanghai \
+            -e METHOD=aes-256-gcm \
+            -e PASSWORD=6a17a5dd-5f76-4b09-b567-9b0d5d449da5 \
+            shadowsocks/shadowsocks-libev
+
+          docker logs -f frpc
