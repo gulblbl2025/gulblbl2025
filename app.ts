@@ -184,16 +184,19 @@ import fs from 'fs';
         const authorizeFrame = await circleciPage.waitForFrame(frame => frame.url().startsWith("https://github.com/login/oauth/authorize"), { timeout: 3_000 });
         if (authorizeFrame) {
             await Utility.waitForSeconds(3);
+            const reauthorization = await authorizeFrame.$("//h1[contains(text(),'Reauthorization required')]");
             await (await authorizeFrame.$x("//button[contains(text(), 'Authorize circleci')]")).click();
             logger.info("CircleCI 授权成功");
 
-            if (await circleciPage.$x("//h3[contains(text(), 'Welcome to CircleCI!')]")) {
-                for (let i = 1; i <= 3; i++) {
-                    await circleciPage.click(`(//span[contains(text(), 'Select...')])[${i}]`);
+            if (!reauthorization) {
+                if (await circleciPage.$x("//h3[contains(text(), 'Welcome to CircleCI!')]")) {
+                    for (let i = 1; i <= 3; i++) {
+                        await circleciPage.click(`(//span[contains(text(), 'Select...')])[${i}]`);
+                    }
                 }
-            }
 
-            await circleciPage.click("//button[contains(., 'Let\'s Go')]");
+                await circleciPage.click("//button[contains(., 'Let\'s Go')]");
+            }
         }
 
         await circleciPage.waitForFrame(frame => frame.url() == "https://app.circleci.com/home");
