@@ -221,7 +221,7 @@ import fs from 'fs';
             logger.info("停止所有");
             await circleciPage.goto(`https://app.circleci.com/pipelines/github/${username}`);
             await circleciPage.$x("//span[contains(text(),'All Pipelines')]");
-            const buttons = await circleciPage.$$("//button[contains(@aria-label, 'RUNNING workflow')]/ancestor::div//button[contains(@aria-label, 'Cancel workflow')]");
+            const buttons = await circleciPage.$$x("//button[contains(@aria-label, 'RUNNING workflow')]/ancestor::div//button[contains(@aria-label, 'Cancel workflow')]");
             logger.info("可取消工作流数量", buttons.length);
             for (const button of buttons) {
                 button.click();
