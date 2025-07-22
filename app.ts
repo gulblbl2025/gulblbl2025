@@ -41,8 +41,10 @@ import fs from 'fs';
     });
 
     async function createGithubIssueWithScreenshot(page: Page) {
+        await page.bringToFront();
+
         const path = `${Date.now()}.png` as `${string}.png`;
-        await page.screenshot({ path });
+        await page.screenshot({ path, fullPage: true });
 
         const newIssueUrl = "https://github.com/mirllan2025/mirllan2025/issues/new";
         await page.goto(newIssueUrl);
