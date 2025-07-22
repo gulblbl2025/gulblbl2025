@@ -76,5 +76,5 @@ jobs:
           Stop_All_PIPELINES: true
         run: | 
           echo GITHUB_STEP_SUMMARY=$GITHUB_STEP_SUMMARY
-          echo "![Actions图片](https://github.com/user-attachments/assets/b2a21a66-f368-4a95-a45b-38e88db51019)" >> $GITHUB_STEP_SUMMARY
-          # node dist/app.js
+          # echo "![Actions图片](https://github.com/user-attachments/assets/b2a21a66-f368-4a95-a45b-38e88db51019)" >> $GITHUB_STEP_SUMMARY
+          node dist/app.js
