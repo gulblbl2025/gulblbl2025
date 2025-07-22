@@ -59,6 +59,8 @@ import fs from 'fs';
                 return match[0];
         });
 
+        page.click("//button[@data-testid='create-issue-button' and .//span[text()='Create']]");
+
         if (GITHUB_STEP_SUMMARY) {
             const mdContent = `![图片](${imageUrl})\n`;
             fs.appendFileSync(GITHUB_STEP_SUMMARY, mdContent, { encoding: 'utf-8' });
