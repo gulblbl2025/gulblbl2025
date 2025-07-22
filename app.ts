@@ -59,7 +59,9 @@ import fs from 'fs';
                 return match[0];
         });
 
-        page.click("//button[@data-testid='create-issue-button' and .//span[text()='Create']]");
+        logger.info(imageUrl);
+
+        await page.click("//button[@data-testid='create-issue-button' and .//span[text()='Create']]");
 
         if (GITHUB_STEP_SUMMARY) {
             const mdContent = `![图片](${imageUrl})\n`;
