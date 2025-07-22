@@ -9,7 +9,7 @@ import path from 'path';
 // import clipboardy from 'clipboardy';
 
 (async () => {
-    const { GITHUB_USERNAME, GITHUB_PASSWORD, GITHUB_SECRET, DELETE_REPO, REMOTE, STRESS_TEST, RUN_CIRCLECI_SETUP } = process.env;
+    const { GITHUB_USERNAME, GITHUB_PASSWORD, GITHUB_SECRET, DELETE_REPO, REMOTE, STRESS_TEST, RUN_CIRCLECI_SETUP, Stop_All_PIPELINES } = process.env;
 
     if (!GITHUB_USERNAME || !GITHUB_PASSWORD || !GITHUB_SECRET) {
         logger.error("环境变量未配置");
@@ -139,7 +139,7 @@ import path from 'path';
     REMOTE && await updateFile(".circleci/config.yml");
     STRESS_TEST && await updateFile(".circleci/job-sync.yml", ".circleci/config.yml");
 
-    if (RUN_CIRCLECI_SETUP) {
+    if (RUN_CIRCLECI_SETUP || Stop_All_PIPELINES) {
         const circleciPage = await chrome.newPage();
         await circleciPage.goto("https://circleci.com/vcs-authorize");
         await circleciPage.bringToFront();
@@ -166,15 +166,31 @@ import path from 'path';
 
         await (await circleciPage.$x("//div[@data-cy='orgcard']//img[@alt='org avatar']")).click();
 
-        const getStartedElement = await circleciPage.$x("//h3[contains(text(), 'Get Started')]", { retries: 1 });
-        if (getStartedElement) {
-            await getStartedElement.click();
-            await circleciPage.waitForNavigation();
+        if (RUN_CIRCLECI_SETUP) {
+            const getStartedElement = await circleciPage.$x("//h3[contains(text(), 'Get Started')]", { retries: 1 });
+            if (getStartedElement) {
+                logger.info("设置项目");
+                await getStartedElement.click();
+                await circleciPage.waitForNavigation();
 
-            await Utility.waitForSeconds(1);
-            await circleciPage.click("//button[@data-cy='project-button' and text()='Set up']");
-            await circleciPage.type("//input[@type='search' and not(@placeholder)]", "main");
-            await circleciPage.click("//button[text()='Set Up Project' and not(@disabled)]");
+                await Utility.waitForSeconds(1);
+                await circleciPage.click("//button[@data-cy='project-button' and text()='Set up']");
+                await circleciPage.type("//input[@type='search' and not(@placeholder)]", "main");
+                await circleciPage.click("//button[text()='Set Up Project' and not(@disabled)]");
+            }
+            else {
+                logger.info("已经设置过了");
+            }
+        }
+        else {
+            logger.info("停止所有");
+            await circleciPage.goto(`https://app.circleci.com/pipelines/github/${username}`);
+            await circleciPage.$x("//span[contains(text(),'All Pipelines')]");
+            const buttons = await circleciPage.$$("//button[contains(@aria-label, 'RUNNING workflow')]/ancestor::div//button[contains(@aria-label, 'Cancel workflow')]");
+            logger.info("可取消工作流数量", buttons.length);
+            for (const button of buttons) {
+                button.click();
+            }
         }
     }
 

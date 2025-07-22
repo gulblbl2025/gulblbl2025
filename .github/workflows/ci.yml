@@ -10,6 +10,7 @@ on:
           - 远程
           - 压测
           - 配置项目
+          - 停止所有
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -66,5 +67,12 @@ jobs:
         if: ${{ inputs.action == '配置项目' }}
         env:
           RUN_CIRCLECI_SETUP: true
+        run: | 
+          node dist/app.js
+
+      - name: 停止所有
+        if: ${{ inputs.action == '停止所有' }}
+        env:
+          Stop_All_PIPELINES: true
         run: | 
           node dist/app.js
