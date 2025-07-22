@@ -59,8 +59,6 @@ import fs from 'fs';
                 return match[0];
         });
 
-        logger.info(imageUrl);
-
         await page.click("//button[@data-testid='create-issue-button' and .//span[text()='Create']]");
 
         if (GITHUB_STEP_SUMMARY) {
@@ -179,6 +177,7 @@ import fs from 'fs';
         const circleciPage = await browser.newPage();
         await circleciPage.goto("https://circleci.com/vcs-authorize");
         await circleciPage.bringToFront();
+        await (await circleciPage.$x("//button[text()='Allow all cookies']")).click();
         await (await circleciPage.$x("//button[@data-testid='login-btn']")).click();
         await (await circleciPage.$x("//div[@data-testid='legacy-vcs-dropdown']")).click();
         await (await circleciPage.$x("//a[contains(text(), 'Log in with GitHub')]")).click();
