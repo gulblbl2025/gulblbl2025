@@ -175,8 +175,8 @@ import fs from 'fs';
 
     if (RUN_CIRCLECI_SETUP || Stop_All_PIPELINES) {
         const circleciPage = await browser.newPage();
-        await circleciPage.goto("https://circleci.com/vcs-authorize");
         await circleciPage.bringToFront();
+        await circleciPage.goto("https://circleci.com/vcs-authorize");
         await (await circleciPage.$x("//button[text()='Allow all cookies']", { retries: 1 }))?.click();
         await (await circleciPage.$x("//button[@data-testid='login-btn']")).click();
         await (await circleciPage.$x("//div[@data-testid='legacy-vcs-dropdown']")).click();
