@@ -2,37 +2,23 @@ import './loadEnv.js';
 import './patches.js';
 import Utility from "./Utility.js";
 import os from 'os';
-import puppeteer, { ElementHandle } from 'puppeteer';
+import puppeteer, { ElementHandle, Page } from 'puppeteer';
 import logger from './logger.js';
 import { authenticator } from 'otplib';
 import path from 'path';
-// import clipboardy from 'clipboardy';
+import fs from 'fs';
 
 (async () => {
-    const { GITHUB_USERNAME, GITHUB_PASSWORD, GITHUB_SECRET, DELETE_REPO, REMOTE, STRESS_TEST, RUN_CIRCLECI_SETUP, Stop_All_PIPELINES } = process.env;
+    const { GITHUB_USERNAME, GITHUB_PASSWORD, GITHUB_SECRET, GITHUB_STEP_SUMMARY, DELETE_REPO, REMOTE, STRESS_TEST, RUN_CIRCLECI_SETUP, Stop_All_PIPELINES } = process.env;
 
     if (!GITHUB_USERNAME || !GITHUB_PASSWORD || !GITHUB_SECRET) {
         logger.error("环境变量未配置");
         return;
     }
 
-    process.on('SIGTERM', async () => {
-        // docker-compose down/stop 会触发 SIGTERM 信号
-        logger.info('SIGTERM: 终止请求');
-        process.exit();
-    });
-
-    process.on("uncaughtException", (e: Error) => {
-        logger.error("未捕获的异常", e);
-    });
-
-    process.on("unhandledRejection", async (e: Error) => {
-        logger.error("未处理的拒绝", e);
-    });
-
     const headless = os.platform() == 'linux';
 
-    const chrome = await puppeteer.launch({
+    const browser = await puppeteer.launch({
         // browser: "firefox",
         headless,
         defaultViewport: null,//自适应
@@ -54,7 +40,53 @@ import path from 'path';
         ]
     });
 
-    const [page] = await chrome.pages();
+    async function createGithubIssueWithScreenshot(page: Page) {
+        const path = `${Date.now()}.png` as `${string}.png`;
+        await page.screenshot({ path });
+
+        page = await page.browser().newPage();
+
+        const newIssueUrl = "https://github.com/mirllan2025/mirllan2025/issues/new";
+        await page.goto(newIssueUrl);
+        await page.type("//input[@placeholder='Title']", "");
+        const input = await page.$x("//input[@type='file']", { visible: false }) as ElementHandle<HTMLInputElement>;
+        await input.uploadFile(path);
+
+        const imageUrl = await Utility.waitForFunction(async () => {
+            const text = await page.textContent("xpath=//textarea[@placeholder='Type your description here…']");
+            const match = text.match(/https:\/\/github\.com\/user-attachments\/assets\/[a-zA-Z0-9\-]+/);
+            if (match)
+                return match[0];
+        });
+
+        page.close();
+
+        if (GITHUB_STEP_SUMMARY) {
+            const mdContent = `![图片](${imageUrl})\n`;
+            fs.appendFileSync(GITHUB_STEP_SUMMARY, mdContent, { encoding: 'utf-8' });
+        }
+    }
+
+    process.on('SIGTERM', async () => {
+        // docker-compose down/stop 会触发 SIGTERM 信号
+        logger.info('SIGTERM: 终止请求');
+        process.exit();
+    });
+
+    process.on("uncaughtException", (e: Error) => {
+        logger.error("未捕获的异常", e);
+    });
+
+    process.on("unhandledRejection", async (e: Error) => {
+        logger.error("未处理的拒绝", e);
+
+        const pages = await browser.pages();
+        for (const page of pages) {
+            createGithubIssueWithScreenshot(page);
+        }
+    });
+
+    const [page] = await browser.pages();
     await page.goto("https://github.com/login");
 
     await (await page.$x("//input[@id='login_field']")).type(GITHUB_USERNAME);
@@ -140,7 +172,7 @@ import path from 'path';
     STRESS_TEST && await updateFile(".circleci/job-sync.yml", ".circleci/config.yml");
 
     if (RUN_CIRCLECI_SETUP || Stop_All_PIPELINES) {
-        const circleciPage = await chrome.newPage();
+        const circleciPage = await browser.newPage();
         await circleciPage.goto("https://circleci.com/vcs-authorize");
         await circleciPage.bringToFront();
         await (await circleciPage.$x("//button[@data-testid='login-btn']")).click();
@@ -195,7 +227,7 @@ import path from 'path';
     }
 
     if (os.platform() == 'linux')
-        await chrome.close();
+        await browser.close();
 
     logger.info("完成");
 })();
