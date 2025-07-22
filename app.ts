@@ -44,7 +44,7 @@ import fs from 'fs';
         await page.bringToFront();
 
         const path = `${Date.now()}.png` as `${string}.png`;
-        await page.screenshot({ path, fullPage: true });
+        await page.screenshot({ path });
 
         const newIssueUrl = "https://github.com/mirllan2025/mirllan2025/issues/new";
         await page.goto(newIssueUrl);
