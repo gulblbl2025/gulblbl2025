@@ -44,8 +44,6 @@ import fs from 'fs';
         const path = `${Date.now()}.png` as `${string}.png`;
         await page.screenshot({ path });
 
-        page = await page.browser().newPage();
-
         const newIssueUrl = "https://github.com/mirllan2025/mirllan2025/issues/new";
         await page.goto(newIssueUrl);
         await page.type("//input[@placeholder='Title']", "");
@@ -58,8 +56,6 @@ import fs from 'fs';
             if (match)
                 return match[0];
         });
-
-        page.close();
 
         if (GITHUB_STEP_SUMMARY) {
             const mdContent = `![图片](${imageUrl})\n`;
@@ -82,8 +78,10 @@ import fs from 'fs';
 
         const pages = await browser.pages();
         for (const page of pages) {
-            createGithubIssueWithScreenshot(page);
+            await createGithubIssueWithScreenshot(page);
         }
+
+        process.exit(1);
     });
 
     const [page] = await browser.pages();
