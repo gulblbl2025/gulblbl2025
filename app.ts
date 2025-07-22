@@ -48,7 +48,7 @@ import fs from 'fs';
 
         const newIssueUrl = "https://github.com/mirllan2025/mirllan2025/issues/new";
         await page.goto(newIssueUrl);
-        await page.type("//input[@placeholder='Title']", "");
+        await page.type("//input[@placeholder='Title']", new Date().toString());
         const input = await page.$x("//input[@type='file']", { visible: false }) as ElementHandle<HTMLInputElement>;
         await input.uploadFile(path);
 
