@@ -88,10 +88,7 @@ import fs from 'fs';
         process.exit(1);
     });
 
-    const [circleciPage] = await browser.pages();
-    await circleciPage.goto("https://circleci.com/vcs-authorize");
-
-    const page = await browser.newPage();
+    const [page] = await browser.pages();
     await page.goto("https://github.com/login");
 
     await (await page.$x("//input[@id='login_field']")).type(GITHUB_USERNAME);
@@ -177,8 +174,9 @@ import fs from 'fs';
     STRESS_TEST && await updateFile(".circleci/job-sync.yml", ".circleci/config.yml");
 
     if (RUN_CIRCLECI_SETUP || Stop_All_PIPELINES) {
-        await circleciPage.bringToFront();
-        await (await circleciPage.$x("//button[text()='Allow all cookies']", { retries: 1 }))?.click();
+        const circleciPage = await browser.newPage();
+        await circleciPage.goto("https://circleci.com/vcs-authorize");
+        await (await circleciPage.$x("//a[contains(text(), 'Allow all cookies')]"))?.click();
         await (await circleciPage.$x("//button[@data-testid='login-btn']")).click();
         await (await circleciPage.$x("//div[@data-testid='legacy-vcs-dropdown']")).click();
         await (await circleciPage.$x("//a[contains(text(), 'Log in with GitHub')]")).click();
